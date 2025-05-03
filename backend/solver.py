@@ -1,7 +1,5 @@
-import sys
 import math
 import copy
-import time
 import csv
 
 def parse_csv(file):
@@ -269,35 +267,3 @@ def calculate_domain(board: list, row_index: int, col_index: int):
 #                                         print(elem, end="")      
 # #                         # print on next line   
 #                         print("")
-
-
-
-#         # get the file name, initializing board and values to assign
-#         filename = input("Enter file name: ")
-#         board, to_assign = read_file(filename)
-
-#         # start timer
-#         start_time = time.time()
-
-#         solution = solve(board, to_assign)
-#         # end timer
-#         end_time = time.time()
-
-#         if (solution == None):
-#                 print("\nNo solution found.")
-#         else:
-#                 # print in a grid format
-#                 print("\nSOLUTION:")
-#                 for row in solution:
-#                         for col_index, elem in enumerate(row):
-#                                 # add space after each element except for the last element in the row
-#                                 if (col_index != 8):
-#                                         print(elem, end=" ")
-#                                 else:
-#                                         print(elem, end="")      
-#                         # print on next line   
-#                         print("")
-
-#                 print("\nAlgorithm took " + f"{(end_time - start_time):.4f}" + " seconds to run")
-
-
