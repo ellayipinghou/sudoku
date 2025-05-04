@@ -19,45 +19,53 @@ function App() {
         return grid;
     };
 
+    const createEntireUnfilledPositions = () => {
+        // record which cells had values before solving and set unfilled positions
+        const positions = new Set();
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                // create a unique key for each position
+                const key = `${i}-${j}`;
+                // store true if the cell has a value, false otherwise
+                positions.add(key);
+                
+            }
+        }
+        return positions;
+    }
+
     const [grid, setGrid] = useState(createEmptyGrid());
     const [prevGrid, setPrevGrid] = useState(createEmptyGrid());
-    const [NaNError, setNaNError] = useState(false);
-    const [duplicateError, setDuplicateError] = useState(false);
-    const [solveError, setSolveError] = useState(false);
-    const [serverError, setServerError] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+
+    // keeps track of the most recent element that hint revealed
+    const [hintElem, setHintElem] = useState(null);
+
+    // keeps track of duplicate, solve, server, and value, and format error
+    const [error, setError] = useState(""); 
 
     const [showUploadModal, setShowUploadModal] = useState(false);
     
     // store unfilled input positions before solving, empty at first
-    const [unfilledPositions, setUnfilledPositions] = useState(new Set());
+    const [unfilledPositions, setUnfilledPositions] = useState(createEntireUnfilledPositions());
 
     const updateGrid = (e, rowIndex, colIndex) => {
         setSubmitted(false);
-    
+        setError("");
         const newVal = e.target.value;
+        
         // if backspace or empty, set back to -1
         if (newVal === "") {
             // create new object to re-render grid
             const newGrid = [...grid.map(row => [...row])];
             newGrid[rowIndex][colIndex] = -1;
             setGrid(newGrid);
-
-            // set all errors false
-            setDuplicateError(false);
-            setNaNError(false);
-            setSolveError(false);
-            setServerError(false);
             return;
         }
 
         // if not a number (which means not a digit, since we limit input to 1 character), show error
         if (isNaN(newVal)) {
-            setNaNError(true);
-
-            setDuplicateError(false);
-            setSolveError(false);
-            setServerError(false);
+            setError("Please enter a digit between 1 and 9")
             return;
         }
 
@@ -66,14 +74,9 @@ function App() {
 
         // if not 1-9, show error
         if (numVal < 1 || numVal > 9) {
-            setNaNError(true);
+            setError("Please enter a digit between 1 and 9")
             return;
         }
-
-        setNaNError(false);
-        setDuplicateError(false);
-        setSolveError(false);
-        setServerError(false);
         
         // check for duplicates and set error if true
         const rowDuplicate = checkRow(numVal, rowIndex);
@@ -81,7 +84,7 @@ function App() {
         const blockDuplicate = checkBlock(numVal, rowIndex, colIndex);
 
         if (rowDuplicate || colDuplicate || blockDuplicate) {
-            setDuplicateError(true);
+            setError("No duplicates allowed within rows, columns, or inner grids");
             return;
         }
 
@@ -164,104 +167,91 @@ function App() {
     }
 
     const handleSubmit = async () => {
-        if (duplicateError || NaNError) {
+        if (error != "") {
             return;
         }
 
-        try {
-            // save current state before solving
-            setPrevGrid([...grid.map(row => [...row])]);
-            
-            // record which cells had values before solving and set unfilled positions
-            const positions = new Set();
-            for (let i = 0; i < 9; i++) {
-                for (let j = 0; j < 9; j++) {
-                    // only add to unfilled positions if it does not exists in grid
-                    if (grid[i][j] === -1) {
-                        // create a unique key for each position
-                        const key = `${i}-${j}`;
-                        // store true if the cell has a value, false otherwise
-                        positions.add(key);
-                    }
-                    
-                }
-            }
-            setUnfilledPositions(positions);
-            
-            console.log("Unfilled positions:", positions);
+        const result = await getResult();
+        if (result == null) {
+            // server error case
+            return
+        } 
+        if (result?.solution) {
+            setGrid(result.solution);
+            setSubmitted(true);
+            setError("");
 
-            // send to backend
-            const response = await fetch('http://localhost:5000/solve', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ grid }),
-            });
-    
-            const result = await response.json();
-            console.log("Response from backend:", result);
-            
-            // if there's a solution, set the grid with the new solution
-            if (result?.solution) {
-                setGrid(result.solution);
-                setSubmitted(true);
-
-                setDuplicateError(false);
-                setNaNError(false);
-                setSolveError(false);
-                setServerError(false);
-            } else {
-                setSolveError(true);
-
-                setDuplicateError(false);
-                setNaNError(false);
-                setSubmitted(false);
-                setServerError(false);
-            }
-        } catch (error) {
-            setServerError(true);
-
-            console.error("Error sending grid to backend:", error);
-            setSolveError(false);
-            setDuplicateError(false);
-            setNaNError(false);
-            setSubmitted(false);
+        } else {
+            setError("No solution, check that all inputs are as intended");
         }
     };
 
+    // TODO: possible bug - solving, unsolving, then unsolve again is allowed??
     const handleUnsolve = () => {
         setGrid([...prevGrid.map(row => [...row])]);
-        setUnfilledPositions(new Set());
+        setUnfilledPositions(createEntireUnfilledPositions());
+        setError("");
         setSubmitted(false);
-        setDuplicateError(false);
-        setNaNError(false);
-        setServerError(false);
-        setSolveError(false);
     }
     
     const handleReset = () => {
         setGrid(createEmptyGrid());
-        setUnfilledPositions(new Set());
+        setUnfilledPositions(createEntireUnfilledPositions());
+        setError("");
         setSubmitted(false);
-        setDuplicateError(false);
-        setNaNError(false);
-        setServerError(false);
-        setSolveError(false);
     }
 
-    const handleUpload = () => {
-        setShowUploadModal(true);
+    const handleUpload = async (e) => {
+        e.preventDefault(); // prevent form from refreshing
+
+        const fileInput = document.getElementById('csv_file');
+        const file = fileInput.files[0];
+        if (!file) {
+            alert("Please select a CSV file.");
+            return;
+        }
+        console.log("fileInput is ", file);
+
+        const formData = new FormData();
+        formData.append('csv_file', file);
+
+        try {
+            const response = await fetch('http://localhost:5000/uploadCSV', {
+              method: 'POST',
+              body: formData,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Server error response:", errorText);
+                throw new Error("Failed to upload CSV");
+            }
+
+            const result = await response.json();
+            console.log("resulting grid:", result.grid);
+            if (result?.grid) {
+                setGrid(result.grid);
+                setError("");
+                if (isFull(result.grid)) {
+                    setSubmitted(true);
+                }
+                setSubmitted(false);
+            } else {
+                setError("Incorrect CSV Format");
+            }
+        } catch (err) {
+            console.error("Error uploading CSV (server):", err);
+            setError("Error sending board to server")
+        }
+
+        setShowUploadModal(false);
     }
 
-    const handleHint = async () => {
-        // TODO: handle empty case and full case
-
+    const getResult = async () => {
         try {
             // save current state before solving
             setPrevGrid([...grid.map(row => [...row])]);
-            
-            // record which cells had values before solving and set unfilled positions
+            //setUnfilledPositions(createUnfilledPositions());
             const positions = new Set();
             for (let i = 0; i < 9; i++) {
                 for (let j = 0; j < 9; j++) {
@@ -275,6 +265,7 @@ function App() {
                     
                 }
             }
+            
             setUnfilledPositions(positions);
 
             const response = await fetch('http://localhost:5000/solve', {
@@ -285,51 +276,53 @@ function App() {
                 body: JSON.stringify({ grid }),
             });
             const result = await response.json();
-            console.log("Response from backend:", result);
+            return result;
+            
+        } catch (err) {
+            setError("Error sending board to server");
+            return null;
+        }
+    }
 
-            if (result?.solution) {
-                const newGrid = [...grid.map((row) => [...row])];
-                // make unfilledPositions into an array
-                const position_array = Array.from(positions);
+    const handleHint = async () => {
+        const result = await getResult();
+        if (result == null) {
+            // server error case
+            return
+        } 
+        if (result?.solution) {
+            const newGrid = [...grid.map((row) => [...row])];
+            // make unfilledPositions into an array
+            const position_array = Array.from(unfilledPositions);
 
-                const randomIndex = Math.floor(Math.random() * position_array.length);
-                const randomElem = position_array[randomIndex];
-                console.log("random element to reveal is ", randomElem);
-                
-                const grid_indices = randomElem.split("-");
-                const rowIndex = parseInt(grid_indices[0]);
-                const colIndex = parseInt(grid_indices[1]);
-                console.log("row is " + rowIndex + ", col is " + colIndex);
-                
-                newGrid[rowIndex][colIndex] = result.solution[rowIndex][colIndex];
-                console.log("elem in solution is " + result.solution[rowIndex][colIndex]);
-                setGrid(newGrid);
+            const randomIndex = Math.floor(Math.random() * position_array.length);
+            const randomElem = position_array[randomIndex];
+            
+            const grid_indices = randomElem.split("-");
+            const rowIndex = parseInt(grid_indices[0]);
+            const colIndex = parseInt(grid_indices[1]);
 
-                if (isFull(newGrid)) {
-                    setSubmitted(true);
-                    setUnfilledPositions(new Set());
-                    return;
-                }
 
-            } else {
-                setSolveError(true);
+            // Highlight for 2 seconds
+            setHintElem([rowIndex, colIndex]);
+            setTimeout(() => {
+                setHintElem(null);
+            }, 1500);
+            
+            newGrid[rowIndex][colIndex] = result.solution[rowIndex][colIndex];
+            setGrid(newGrid);
 
-                setDuplicateError(false);
-                setNaNError(false);
-                setSubmitted(false);
-                setServerError(false);
+            if (isFull(newGrid)) {
+                setSubmitted(true);
+                setUnfilledPositions(new Set());
+                return;
             }
 
-        } catch (err) {
-            setServerError(true);
-            console.error("Error sending grid to backend:", error);
-            setSolveError(false);
-            setDuplicateError(false);
-            setNaNError(false);
-            setSubmitted(false);
+        } else {
+            setSolveError(true);
+            setError("");
         }
-        
-        
+  
     }
 
     // Helper function to determine if a cell should be highlighted
@@ -343,6 +336,29 @@ function App() {
 
     return (
         <div className="flex flex-col h-full w-full items-center justify-center">
+            {showUploadModal && (
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[350px] w-[500px] rounded-md bg-white shadow-lg z-50">
+                    <div className="relative w-full">
+                        <button className="absolute top-2 right-2 z-60" onClick={() => setShowUploadModal(false)}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="#DC143C" className="bi bi-x" viewBox="0 0 16 16">
+                                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="flex flex-col space-y-6 items-center mt-10 w-full h-full"> 
+                        <h3 className="font-mulish">Upload CSV File</h3>
+                        <p className="font-mulish text-left mt-2 ml-8">Please upload a .csv file formatted as follows:
+                            <li>Must be a 9×9 grid representing a Sudoku puzzle.</li>
+                            <li>Each cell should contain a number from 1 to 9, or -1 for empty/unknown cells.</li>
+                            <li>Values should be comma-separated, with each row on a new line.</li>
+                        </p>
+                        <form onSubmit={handleUpload} className="mt-6">
+                            <input id="csv_file" name="csv_file" type="file" accept=".csv"/>
+                            <button type="submit" className="h-8 w-20 border-2 border-[#3D591C66] bg-[#B5D293] rounded-2 text-[#3D591C]">Submit</button>
+                        </form>
+                    </div>
+                </div>
+            )}
             <div className="absolute inset-0 -z-10 bg-cover bg-center opacity-40"
                 style={{ backgroundImage: "url('/src/assets/paper-background.jpg')" }}>
             </div>
@@ -356,15 +372,11 @@ function App() {
                 
             </div>
             
-            <p className="text-lg text-red-500 mb-3">
-                {NaNError && "Please enter a digit between 1 and 9"}
-                {duplicateError && "No duplicates allowed within rows, columns, or inner grids"}
-                {solveError && "No solution, check all inputs are as intended"}
-                {serverError && "Error sending board to server"}
-                {!NaNError && !duplicateError && !solveError && !serverError && "\u00A0"}
+            <p className="text-lg text-red-500 mt-2 mb-2">
+                {error != "" ? error : "\u00A0"}
             </p>
             
-            <div className="grid grid-rows-3 grid-cols-3 h-[540px] w-[540px] border-4 border-black box-border">
+            <div className="grid grid-rows-3 grid-cols-3 h-[540px] w-[540px] border-4 border-black box-border z-10">
                 {/* map the large grid rows - rows 0, 1, 2 
                     use fragment to group multiple elements without adding extra nodes to the DOM
                 */}
@@ -384,7 +396,8 @@ function App() {
                                             // get overall indices within entire grid
                                             const rowIndex = boxRow * 3 + cellRow;
                                             const colIndex = boxCol * 3 + cellCol;
-                                            const highlighted = shouldHighlightCell(rowIndex, colIndex);
+                                            const highlightLong = shouldHighlightCell(rowIndex, colIndex);
+                                            const highlightTemp = hintElem?.[0] === rowIndex && hintElem?.[1] === colIndex;
                                             
                                             return (
                                                 <div
@@ -398,7 +411,7 @@ function App() {
                                                         value={grid[rowIndex][colIndex] === -1 ? "" : grid[rowIndex][colIndex]}
                                                         onChange={(e) => updateGrid(e, rowIndex, colIndex)}
                                                         style={{
-                                                            backgroundColor: highlighted ? '#B5D29359' : 'transparent'
+                                                            backgroundColor: highlightTemp || highlightLong ? '#B5D29366' : 'transparent'
                                                         }}
                                                         className="text-center text-xl w-full h-full focus:outline-none text-black"
                                                     />
@@ -412,7 +425,6 @@ function App() {
                     </React.Fragment>
                 ))}
             </div>
-            {showUploadModal && <UploadModule onClick={() => setShowUploadModal(false)}></UploadModule>}
             {/* Buttons */}
             <div className="flex flex-row space-x-16">
                 {/* Solve button, disables when already submitted */}
@@ -451,7 +463,7 @@ function App() {
                 <div className="flex align-center justify-center border-2 border-[#565748] rounded-md h-10 w-20 bg-[#e4e6c3] mt-10">
                     <button 
                         type="button" 
-                        onClick={handleUpload}
+                        onClick={() => setShowUploadModal(true)}
                         className="text-[#725E17] font-mulish"
                     >
                         Upload

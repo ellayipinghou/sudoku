@@ -8,13 +8,12 @@ from solver import parse_csv
 app = Flask(__name__)
 
 # enables CORS for development
-CORS(app) 
+CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
 
 @app.route('/solve', methods=['POST'])
 def solve_sudoku():
         data = request.get_json()
         grid = data.get('grid')
-        print("Received grid:", grid)
 
         to_assign = {}
         for row_index, row in enumerate(grid):
@@ -31,8 +30,18 @@ def solve_sudoku():
 
 @app.route('/uploadCSV', methods=['POST'])
 def upload_CSV():
-       data = request.get_json()
-       csv = data.get('csv')
+        if 'csv_file' not in request.files:
+                return jsonify({'error': 'No file part'}), 400
+        
+        # get file from request
+        file = request.files['csv_file']
+        if file.filename == '':
+                return jsonify({'error': 'No selected file'}), 400
+
+        content = file.read().decode('utf-8')
+        grid = parse_csv(content)
+
+        return jsonify({"message": "resulting grid", "grid": grid})
        
 
 if __name__ == '__main__':

@@ -1,27 +1,27 @@
 import math
 import copy
 import csv
+import io
 
-def parse_csv(file):
+def parse_csv(content):
+        f = io.StringIO(content)
         board = []
-        to_assign = {}
-        with open(file, mode ='r') as file:
-                # read csv file line by line
-                reader = csv.reader(file)
-                for row_index, row in enumerate(reader):
-                        int_row = []
-                        for col_index, elem in enumerate(row):
+        reader = csv.reader(f)
+        for row_index, row in enumerate(reader):
+                int_row = []
+                for col_index, elem in enumerate(row):
+                        try:    
                                 elem = int(elem)
-                                if math.isnan(elem):
-                                        return None, None
-                                if elem == -1:
-                                        to_assign[row_index, col_index] = []
-                                elif elem < 1 or elem > 9:
-                                        return None, None
+                                # if invalid number, return None
+                                if (elem < 1 or elem > 9) and (elem != -1):
+                                        return None
                                 int_row.append(elem)
-                                
-                        board.append(int_row)
-        return board, to_assign
+                        except ValueError:
+                                # if conversion fails, return None
+                                return None
+                        
+                board.append(int_row)
+        return board
 
 # check that no two elements in a row are the same
 def check_row(board: list, assigned: dict, row_index: int):
