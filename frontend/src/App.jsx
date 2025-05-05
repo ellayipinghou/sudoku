@@ -274,6 +274,8 @@ function App() {
 
                         if (rowDuplicate || colDuplicate || blockDuplicate) {
                             setError(`Duplicate value ${val} found at row ${r}, column ${c}`);
+                            setGrid(results.data);
+                            setSubmitted(false);
                             return;
                         }
                     }
@@ -409,7 +411,7 @@ function App() {
                         </button>
                     </div>
                     <div className="flex flex-col space-y-6 items-center mt-10 w-full h-full"> 
-                        <h3 className="font-mulish">Upload CSV File</h3>
+                        <h3 className="font-mulish -mt-2">Upload CSV File</h3>
                         <p className="font-mulish text-left mt-1 w-[80%]">Please upload a .csv file formatted as follows:
                             <li>Must be a 9×9 grid representing a Sudoku puzzle</li>
                             <li>Each cell contains a number from 1 to 9, or -1 for unknown cells</li>
@@ -536,8 +538,8 @@ function App() {
                 <div className="flex align-center justify-center border-2 border-[#3D591C] rounded-md h-10 w-20 bg-[#B5D293] mt-10">
                     <button 
                         type="button" 
-                        disabled={isFull(grid)} 
-                        className={`text-[#3D591C] text-md ${isFull(grid) ? "cursor-not-allowed" : ""}`} 
+                        disabled={isFull(grid) || error != ""} 
+                        className={`text-[#3D591C] text-md ${(isFull(grid) || error != "") ? "cursor-not-allowed" : ""}`} 
                         onClick={handleSubmit}
                     >
                         Solve

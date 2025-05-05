@@ -3,26 +3,6 @@ import copy
 import csv
 import io
 
-def parse_csv(content):
-        f = io.StringIO(content)
-        board = []
-        reader = csv.reader(f)
-        for row_index, row in enumerate(reader):
-                int_row = []
-                for col_index, elem in enumerate(row):
-                        try:    
-                                elem = int(elem)
-                                # if invalid number, return None
-                                if (elem < 1 or elem > 9) and (elem != -1):
-                                        return None
-                                int_row.append(elem)
-                        except ValueError:
-                                # if conversion fails, return None
-                                return None
-                        
-                board.append(int_row)
-        return board
-
 # check that no two elements in a row are the same
 def check_row(board: list, assigned: dict, row_index: int):
         # create a set for the values that have been seen within the row
