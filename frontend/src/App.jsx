@@ -5,6 +5,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
+import Papa from 'papaparse';
 
 function App() {
     // create initial empty grid
@@ -47,6 +48,7 @@ function App() {
     const [error, setError] = useState(""); 
 
     const [showUploadModal, setShowUploadModal] = useState(false);
+    const [showImageModal, setShowImageModal] = useState(false);
     
     // store unfilled input positions before solving, empty at first
     const [unfilledPositions, setUnfilledPositions] = useState(createEntireUnfilledPositions());
@@ -203,7 +205,7 @@ function App() {
         setSubmitted(false);
     }
 
-    const handleUpload = async (e) => {
+    const handleCSV = async (e) => {
         e.preventDefault(); // prevent form from refreshing
 
         const fileInput = document.getElementById('csv_file');
@@ -214,39 +216,45 @@ function App() {
         }
         console.log("fileInput is ", file);
 
-        const formData = new FormData();
-        formData.append('csv_file', file);
-
-        try {
-            const response = await fetch('http://localhost:5000/uploadCSV', {
-              method: 'POST',
-              body: formData,
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error("Server error response:", errorText);
-                throw new Error("Failed to upload CSV");
-            }
-
-            const result = await response.json();
-            console.log("resulting grid:", result.grid);
-            if (result?.grid) {
-                setGrid(result.grid);
-                setError("");
-                if (isFull(result.grid)) {
-                    setSubmitted(true);
+        Papa.parse(file, {
+            header: false,
+            skipEmptyLines: true,
+            complete: (results) => {
+                console.log('Parsed CSV data:', results.data);
+                if (results.data.length != 9) {
+                    setError("Incorrect CSV format");
+                    return;
                 }
-                setSubmitted(false);
-            } else {
-                setError("Incorrect CSV Format");
+                let countInRow = 0;
+                for (let r = 0; r < 9; r++) {
+                    if (results.data[r].length != 9) {
+                        setError("Incorrect CSV format");
+                        return;
+                    }
+                    for (let c = 0; c < 9; c++) {
+                        const intResult = parseInt(results.data[r][c]);
+                        if (isNaN(intResult)) {
+                            setError("Incorrect CSV format");
+                            return;
+                        }
+                        if ((intResult != -1) && (intResult < 1 || intResult > 9)) {
+                            setError("Incorrect CSV format");
+                            return;
+                        }
+                        results.data[r][c] = intResult;
+                    }
+                }
+                setError("");
+                setGrid(results.data);
+                
             }
-        } catch (err) {
-            console.error("Error uploading CSV (server):", err);
-            setError("Error sending board to server")
-        }
+        })
 
         setShowUploadModal(false);
+    }
+
+    const handleImage = () => {
+
     }
 
     const getResult = async () => {
@@ -349,12 +357,35 @@ function App() {
                     </div>
                     <div className="flex flex-col space-y-6 items-center mt-10 w-full h-full"> 
                         <h3 className="font-mulish">Upload CSV File</h3>
-                        <p className="font-mulish text-left mt-2 ml-8">Please upload a .csv file formatted as follows:
-                            <li>Must be a 9×9 grid representing a Sudoku puzzle.</li>
-                            <li>Each cell should contain a number from 1 to 9, or -1 for empty/unknown cells.</li>
-                            <li>Values should be comma-separated, with each row on a new line.</li>
+                        <p className="font-mulish text-left mt-3 w-[80%]">Please upload a .csv file formatted as follows:
+                            <li>Must be a 9×9 grid representing a Sudoku puzzle</li>
+                            <li>Each cell contains a number from 1 to 9, or -1 for unknown cells</li>
+                            <li>Values should be comma-separated, with each row on a new line</li>
                         </p>
-                        <form onSubmit={handleUpload} className="mt-6">
+                        <form onSubmit={handleCSV} className="mt-6">
+                            <input id="csv_file" name="csv_file" type="file" accept=".csv"/>
+                            <button type="submit" className="h-8 w-20 border-2 border-[#3D591C66] bg-[#B5D293] rounded-2 text-[#3D591C]">Submit</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {showImageModal && (
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[350px] w-[500px] rounded-md bg-white shadow-lg z-50">
+                    <div className="relative w-full">
+                        <button className="absolute top-2 right-2 z-60" onClick={() => setShowImageModal(false)}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="#DC143C" className="bi bi-x" viewBox="0 0 16 16">
+                                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="flex flex-col space-y-6 items-center mt-10 w-full h-full"> 
+                        <h3 className="font-mulish">Upload Image or Screenshot</h3>
+                        <p className="font-mulish text-left mt-3 w-[80%]">Please upload an image of a sudoku board:
+                            <li>Must be a 9×9 grid representing a Sudoku puzzle</li>
+                            <li>Each cell contains a number from 1 to 9, or -1 if unknown</li>
+                            <li>Should have reasonably clear grid boundaries, digit values, etc</li>
+                        </p>
+                        <form onSubmit={handleImage} className="mt-6">
                             <input id="csv_file" name="csv_file" type="file" accept=".csv"/>
                             <button type="submit" className="h-8 w-20 border-2 border-[#3D591C66] bg-[#B5D293] rounded-2 text-[#3D591C]">Submit</button>
                         </form>
@@ -437,7 +468,7 @@ function App() {
                 ))}
             </div>
             {/* Buttons */}
-            <div className="flex flex-row space-x-16">
+            <div className="flex flex-row space-x-10">
                 {/* Solve button, disables when already submitted */}
                 <div className="flex align-center justify-center border-2 border-[#3D591C] rounded-md h-10 w-20 bg-[#B5D293] mt-10">
                     <button 
@@ -470,14 +501,25 @@ function App() {
                         Reset
                     </button>
                 </div>
-                {/* Upload button */}
+                {/* Upload CSV button */}
                 <div className="flex align-center justify-center border-2 border-[#565748] rounded-md h-10 w-20 bg-[#e4e6c3] mt-10">
                     <button 
                         type="button" 
                         onClick={() => setShowUploadModal(true)}
                         className="text-[#725E17] font-mulish"
                     >
-                        Upload
+                        CSV File
+                    </button>
+                </div>
+                {/* Upload Image button */}
+                <div className="flex align-center justify-center border-2 border-[#3D591C] rounded-md h-10 w-20 bg-[#B5D293] mt-10">
+                    <button 
+                        type="button" 
+                        disabled={submitted} 
+                        className={`text-[#3D591C] ${submitted ? "cursor-not-allowed" : ""}`} 
+                        onClick={() => setShowImageModal(true)}
+                    >
+                        Image
                     </button>
                 </div>
             </div>
