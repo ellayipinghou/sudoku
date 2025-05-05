@@ -1,5 +1,4 @@
 import React from 'react'
-import UploadModule from '../components/upload';
 import { useState, useEffect } from 'react'
 import 'bootstrap/dist/css/bootstrap.min.css';
 import reactLogo from './assets/react.svg'
@@ -47,7 +46,7 @@ function App() {
     // keeps track of duplicate, solve, server, and value, and format error
     const [error, setError] = useState(""); 
 
-    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [showCSVModal, setShowCSVModal] = useState(false);
     const [showImageModal, setShowImageModal] = useState(false);
     
     // store unfilled input positions before solving, empty at first
@@ -83,9 +82,9 @@ function App() {
         }
         
         // check for duplicates and set error if true
-        const rowDuplicate = checkRow(numVal, rowIndex);
-        const colDuplicate = checkCol(numVal, colIndex);
-        const blockDuplicate = checkBlock(numVal, rowIndex, colIndex);
+        const rowDuplicate = checkRow(grid, numVal, rowIndex);
+        const colDuplicate = checkCol(grid, numVal, colIndex);
+        const blockDuplicate = checkBlock(grid, numVal, rowIndex, colIndex);
 
         if (rowDuplicate || colDuplicate || blockDuplicate) {
             setError("No duplicates allowed within rows, columns, or inner grids");
@@ -98,7 +97,7 @@ function App() {
         setGrid(newGrid);
 
         if (isFull(newGrid)) {
-            setSubmitted(true);
+            //setSubmitted(true);
             setUnfilledPositions(new Set());
             return;
         }
@@ -114,14 +113,17 @@ function App() {
     }
 
     // check if there are any duplicates in the row
-    const checkRow = (val, row) => {
-        return grid[row].includes(parseInt(val));
+    const checkRow = (currGrid, val, row) => {
+        return (val != -1) && (currGrid[row].includes(parseInt(val)));
     }
 
     // check if there are any duplicates in the column
-    const checkCol = (val, col) => {
+    const checkCol = (currGrid, val, col) => {
+        if (val == -1) {
+            return false;
+        }
         for (let row = 0; row < 9; row++) {
-            if (grid[row][col] === parseInt(val)) {
+            if (currGrid[row][col] === parseInt(val)) {
                 return true;
             }
         }
@@ -129,13 +131,16 @@ function App() {
     }
 
     // check if there are any duplicates in the block
-    const checkBlock = (val, row, col) => {
+    const checkBlock = (currGrid, val, row, col) => {
+        if (val == -1) {
+            return false;
+        }
         const startRow = Math.floor(row / 3) * 3;
         const startCol = Math.floor(col / 3) * 3;
 
         for (let r = startRow; r < startRow + 3; r++) {
             for (let c = startCol; c < startCol + 3; c++) {
-                if (grid[r][c] === parseInt(val)) {
+                if (currGrid[r][c] === parseInt(val)) {
                     return true;
                 }
             }
@@ -211,7 +216,7 @@ function App() {
         const fileInput = document.getElementById('csv_file');
         const file = fileInput.files[0];
         if (!file) {
-            alert("Please select a CSV file.");
+            alert("Please select a file.");
             return;
         }
         console.log("fileInput is ", file);
@@ -221,40 +226,87 @@ function App() {
             skipEmptyLines: true,
             complete: (results) => {
                 console.log('Parsed CSV data:', results.data);
+                // make sure there are 9 rows
                 if (results.data.length != 9) {
-                    setError("Incorrect CSV format");
+                    setError("Incorrect CSV format: wrong row count");
                     return;
                 }
-                let countInRow = 0;
                 for (let r = 0; r < 9; r++) {
+                    // make sure there are 9 columns
                     if (results.data[r].length != 9) {
-                        setError("Incorrect CSV format");
+                        setError("Incorrect CSV format: wrong column count");
                         return;
                     }
+
                     for (let c = 0; c < 9; c++) {
+                        // convert each element to an int
                         const intResult = parseInt(results.data[r][c]);
-                        if (isNaN(intResult)) {
-                            setError("Incorrect CSV format");
+                        // make sure element is a valid value
+                        if (isNaN(intResult) || !Number.isInteger(intResult)) {
+                            setError(`Value at row ${r}, column ${c} is not a valid integer`);
                             return;
                         }
                         if ((intResult != -1) && (intResult < 1 || intResult > 9)) {
-                            setError("Incorrect CSV format");
+                            setError(`Value at row ${r}, column ${c} must be -1 or between 1-9`);
                             return;
                         }
+
+                        // TODO: check for floats?
+
+                        // replace element in grid
                         results.data[r][c] = intResult;
                     }
                 }
+
+                // validate input for duplicates
+                for (let r = 0; r < 9; r++) {
+                    for (let c = 0; c < 9; c++) {
+                        const val = results.data[r][c];
+                        // temporarily set this cell to -1 to avoid counting it as a duplicate of itself
+                        results.data[r][c] = -1;
+
+                        const rowDuplicate = checkRow(results.data, val, r);
+                        const colDuplicate = checkCol(results.data, val, c);
+                        const blockDuplicate = checkBlock(results.data, val, r, c);
+
+                        // restore value
+                        results.data[r][c] = val;
+
+                        if (rowDuplicate || colDuplicate || blockDuplicate) {
+                            setError(`Duplicate value ${val} found at row ${r}, column ${c}`);
+                            return;
+                        }
+                    }
+                }
+
+                // set grid and clear errors
                 setError("");
                 setGrid(results.data);
+                setSubmitted(false);
                 
             }
         })
-
-        setShowUploadModal(false);
+        
+        setShowCSVModal(false);
     }
 
+    // TODO: write!
     const handleImage = () => {
+        // e.preventDefault(); // prevent form from refreshing
 
+
+        // const fileInput = document.getElementById('image_file');
+        // const file = fileInput.files[0];
+        // if (!file) {
+        //     alert("Please select a file.");
+        //     return;
+        // }
+        // console.log("fileInput is ", file);
+
+        // const formData = new FormData();
+        // formData.append('image_file', file);
+
+        // TODO: send to backend, do image processing to get contours, recognize digits, etc
     }
 
     const getResult = async () => {
@@ -346,10 +398,11 @@ function App() {
 
     return (
         <div className="flex flex-col h-full w-full items-center justify-center">
-            {showUploadModal && (
+            {/* modal for CSV upload button */}
+            {showCSVModal && (
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[350px] w-[500px] rounded-md bg-white shadow-lg z-50">
                     <div className="relative w-full">
-                        <button className="absolute top-2 right-2 z-60" onClick={() => setShowUploadModal(false)}>
+                        <button className="absolute top-2 right-2 z-60" onClick={() => setShowCSVModal(false)}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="#DC143C" className="bi bi-x" viewBox="0 0 16 16">
                                 <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
                             </svg>
@@ -357,10 +410,11 @@ function App() {
                     </div>
                     <div className="flex flex-col space-y-6 items-center mt-10 w-full h-full"> 
                         <h3 className="font-mulish">Upload CSV File</h3>
-                        <p className="font-mulish text-left mt-3 w-[80%]">Please upload a .csv file formatted as follows:
+                        <p className="font-mulish text-left mt-1 w-[80%]">Please upload a .csv file formatted as follows:
                             <li>Must be a 9×9 grid representing a Sudoku puzzle</li>
                             <li>Each cell contains a number from 1 to 9, or -1 for unknown cells</li>
                             <li>Values should be comma-separated, with each row on a new line</li>
+                            <li>No duplicates within rows, columns, or 3x3 blocks</li>
                         </p>
                         <form onSubmit={handleCSV} className="mt-6">
                             <input id="csv_file" name="csv_file" type="file" accept=".csv"/>
@@ -369,6 +423,7 @@ function App() {
                     </div>
                 </div>
             )}
+            {/* modal for upload button */}
             {showImageModal && (
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[350px] w-[500px] rounded-md bg-white shadow-lg z-50">
                     <div className="relative w-full">
@@ -386,7 +441,7 @@ function App() {
                             <li>Should have reasonably clear grid boundaries, digit values, etc</li>
                         </p>
                         <form onSubmit={handleImage} className="mt-6">
-                            <input id="csv_file" name="csv_file" type="file" accept=".csv"/>
+                            <input id="image_file" name="image_file" type="file" accept="image/*"/>
                             <button type="submit" className="h-8 w-20 border-2 border-[#3D591C66] bg-[#B5D293] rounded-2 text-[#3D591C]">Submit</button>
                         </form>
                     </div>
@@ -396,13 +451,15 @@ function App() {
                 style={{ backgroundImage: "url('/src/assets/paper-background.jpg')" }}>
             </div>
             
+            {/* TODO: fix responsive styling of lightbulb */}
+            <div>
                 <button disabled={submitted} 
-                        onMouseEnter={() => setShowHintText(true)}
-                        onMouseLeave={() => setShowHintText(false)} 
-                        className={`absolute right-[35%] top-[1%] ${submitted ? "cursor-not-allowed" : ""}`} 
-                        onClick={handleHint}
-                        >
-                    <svg xmlns="absolute right-[20%] http://www.w3.org/2000/svg" width="40" height="40" fill="#F4BB44" class="bi bi-lightbulb mt-4" viewBox="0 0 16 16">
+                    onMouseEnter={() => setShowHintText(true)}
+                    onMouseLeave={() => setShowHintText(false)} 
+                    className={`fixed right-[35%] top-[1%] ${submitted ? "cursor-not-allowed" : ""}`} 
+                    onClick={handleHint}
+                    >
+                    <svg xmlns="absolute right-[20%] http://www.w3.org/2000/svg" width="36" height="36" fill="#F4BB44" class="bi bi-lightbulb mt-4" viewBox="0 0 16 16">
                         <path d="M2 6a6 6 0 1 1 10.174 4.31c-.203.196-.359.4-.453.619l-.762 1.769A.5.5 0 0 1 10.5 13a.5.5 0 0 1 0 1 .5.5 0 0 1 0 1l-.224.447a1 1 0 0 1-.894.553H6.618a1 1 0 0 1-.894-.553L5.5 15a.5.5 0 0 1 0-1 .5.5 0 0 1 0-1 .5.5 0 0 1-.46-.302l-.761-1.77a2 2 0 0 0-.453-.618A5.98 5.98 0 0 1 2 6m6-5a5 5 0 0 0-3.479 8.592c.263.254.514.564.676.941L5.83 12h4.342l.632-1.467c.162-.377.413-.687.676-.941A5 5 0 0 0 8 1"/>
                     </svg>
                 </button>
@@ -412,16 +469,19 @@ function App() {
                     </div>)
                 }
 
-                
-            <div className="flex flex-row items-center space-x-8">
-                <h1 className="text-6xl mt-4 mb-1 font-kaushan text-[#553F0D]">Sudoku Solver</h1>
+                {/* title */}
+                <div className="flex flex-row items-center space-x-8">
+                    <h1 className="text-6xl mt-3 mb-1 font-kaushan text-[#553F0D]">Sudoku Solver</h1>
+                </div>
+            
             </div>
             
-            <p className="text-lg text-red-500 mt-1 mb-3">
+            {/* optional error that appears/disappears under title */}
+            <p className="text-lg text-red-500 mt-1 mb-2">
                 {error != "" ? error : "\u00A0"}
             </p>
             
-            <div className="grid grid-rows-3 grid-cols-3 h-[540px] w-[540px] border-4 border-black box-border z-10">
+            <div className="grid grid-rows-3 grid-cols-3 h-[540px] w-[540px] border-4 border-black z-10">
                 {/* map the large grid rows - rows 0, 1, 2 
                     use fragment to group multiple elements without adding extra nodes to the DOM
                 */}
@@ -476,8 +536,8 @@ function App() {
                 <div className="flex align-center justify-center border-2 border-[#3D591C] rounded-md h-10 w-20 bg-[#B5D293] mt-10">
                     <button 
                         type="button" 
-                        disabled={submitted} 
-                        className={`text-[#3D591C] ${submitted ? "cursor-not-allowed" : ""}`} 
+                        disabled={isFull(grid)} 
+                        className={`text-[#3D591C] text-md ${isFull(grid) ? "cursor-not-allowed" : ""}`} 
                         onClick={handleSubmit}
                     >
                         Solve
@@ -488,7 +548,7 @@ function App() {
                     <button 
                         type="button" 
                         disabled={!submitted} 
-                        className={`text-[#565748] font-mulish ${submitted ? "" : "cursor-not-allowed"}`} 
+                        className={`text-[#565748] text-md font-mulish ${submitted ? "" : "cursor-not-allowed"}`} 
                         onClick={handleUnsolve}
                     >
                         Unsolve
@@ -499,7 +559,7 @@ function App() {
                     <button 
                         type="button" 
                         onClick={handleReset}
-                        className="text-[#725E17] font-mulish"
+                        className="text-[#725E17] text-md font-mulish"
                     >
                         Reset
                     </button>
@@ -508,8 +568,8 @@ function App() {
                 <div className="flex align-center justify-center border-2 border-[#565748] rounded-md h-10 w-20 bg-[#e4e6c3] mt-10">
                     <button 
                         type="button" 
-                        onClick={() => setShowUploadModal(true)}
-                        className="text-[#565748] font-mulish"
+                        onClick={() => setShowCSVModal(true)}
+                        className="text-[#565748] text-md font-mulish"
                     >
                         CSV File
                     </button>
@@ -519,7 +579,7 @@ function App() {
                     <button 
                         type="button" 
                         disabled={submitted} 
-                        className={`text-[#3D591C] ${submitted ? "cursor-not-allowed" : ""}`} 
+                        className={`text-[#3D591C] text-md ${submitted ? "cursor-not-allowed" : ""}`} 
                         onClick={() => setShowImageModal(true)}
                     >
                         Image
