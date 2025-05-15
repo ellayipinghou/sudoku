@@ -1,10 +1,10 @@
 import React from 'react'
 import { useState, useEffect } from 'react'
 import 'bootstrap/dist/css/bootstrap.min.css';
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 import Papa from 'papaparse';
+import Spinner from 'react-bootstrap/Spinner';
+
 
 function App() {
     // create initial empty grid
@@ -37,13 +37,10 @@ function App() {
         const getGridDimensions = () => {
         const height = window.innerHeight;
         const width = window.innerWidth;
-        console.log("height: ", height, "width", width);
 
         if (height < width) {
-            console.log("doing h-[65vh]");
             return "w-[65vh]"
         }
-        console.log("doing w-[65vw]")
         return "w-[65vw]"
     }
 
@@ -56,12 +53,15 @@ function App() {
     const [hintElem, setHintElem] = useState(null);
     // true when hovering over lightbulb
     const [showHintText, setShowHintText] = useState(false);
-
+    // load spinner while waiting for image parsing
+    const [showLoadSpinner, setShowLoadSpinner] = useState(false);
     // keeps track of duplicate, solve, server, and value, and format error
     const [error, setError] = useState(""); 
 
     const [showCSVModal, setShowCSVModal] = useState(false);
     const [showImageModal, setShowImageModal] = useState(false);
+    const [showWarningModal, setShowWarningModal] = useState(false);
+
     
     // store unfilled input positions before solving, empty at first
     const [unfilledPositions, setUnfilledPositions] = useState(createEntireUnfilledPositions());
@@ -321,23 +321,51 @@ function App() {
         setShowCSVModal(false);
     }
 
-    // TODO: write!
-    const handleImage = () => {
-        // e.preventDefault(); // prevent form from refreshing
+    const handleImage = async (e) => {
+        e.preventDefault(); // prevent form from refreshing
+        const fileInput = document.getElementById('image_file');
+        const file = fileInput.files[0];
+        if (!file) {
+            alert("Please select a file.");
+            return;
+        }
 
+        const formData = new FormData();
+        formData.append('image', file);
 
-        // const fileInput = document.getElementById('image_file');
-        // const file = fileInput.files[0];
-        // if (!file) {
-        //     alert("Please select a file.");
-        //     return;
-        // }
-        // console.log("fileInput is ", file);
+        try {
+            setShowLoadSpinner(true);
+            const response = await fetch('http://localhost:5000/image', {
+                method: 'POST',
+                body: formData,
+            });
 
-        // const formData = new FormData();
-        // formData.append('image_file', file);
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Image uploaded successfully!');
+                console.log(data.message);
+                console.log(data.grid);
 
-        // TODO: send to backend, do image processing to get contours, recognize digits, etc
+                setGrid(data.grid);
+
+                setShowLoadSpinner(false);
+                setShowImageModal(false);
+
+                setShowWarningModal(true);
+                setError("")
+            } else {
+                setError("Error sending image to server")
+                setShowLoadSpinner(false);
+                setShowImageModal(false);
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            setError("Error sending image to server")
+            setShowLoadSpinner(false);
+            setShowImageModal(false)
+        }
+
     }
 
     const getResult = async () => {
@@ -435,7 +463,7 @@ function App() {
             </div>
             {/* modal for CSV upload button */}
             {showCSVModal && (
-                <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[350px] w-[500px] rounded-md bg-white shadow-lg z-50">
+                <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[350px] w-[500px] max-w-[80%] rounded-md bg-white shadow-lg z-50">
                     <div className="relative w-full">
                         <button className="absolute top-2 right-2 z-60" onClick={() => setShowCSVModal(false)}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="#DC143C" className="bi bi-x" viewBox="0 0 16 16">
@@ -443,45 +471,70 @@ function App() {
                             </svg>
                         </button>
                     </div>
-                    <div className="flex flex-col space-y-6 items-center mt-10 w-full h-full"> 
+                    <div className="flex flex-col space-y-6 items-center justify-center w-full h-full"> 
                         <h3 className="font-mulish -mt-2">Upload CSV File</h3>
-                        <p className="font-mulish text-left mt-1 w-[80%]">Please upload a .csv file formatted as follows:
+                        <p className="font-mulish text-left mt-3 w-[80%]">Please upload a .csv file formatted as follows:
                             <li>Must be a 9×9 grid representing a Sudoku puzzle</li>
                             <li>Each cell contains a number from 1 to 9, or -1 for unknown cells</li>
                             <li>Values should be comma-separated, with each row on a new line</li>
                             <li>No duplicates within rows, columns, or 3x3 blocks</li>
                         </p>
-                        <form onSubmit={handleCSV} className="mt-6">
-                            <input id="csv_file" name="csv_file" type="file" accept=".csv"/>
-                            <button type="submit" className="h-8 w-20 border-2 border-[#3D591C66] bg-[#B5D293] rounded-2 text-[#3D591C]">Submit</button>
-                        </form>
+                        <div className= "flex flex-row shrink mt-6">
+                            <form onSubmit={handleCSV}>
+                                <input id="csv_file" name="csv_file" type="file" accept=".csv"/>
+                                <button type="submit" className="h-8 w-20 border-2 border-[#3D591C66] bg-[#B5D293] rounded-2 text-[#3D591C]">Submit</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             )}
             {/* modal for upload button */}
             {showImageModal && (
-                <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[350px] w-[500px] rounded-md bg-white shadow-lg z-50">
+                <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[350px] w-[500px] max-w-[80%] rounded-md bg-white shadow-lg z-50">
                     <div className="relative w-full">
-                        <button className="absolute top-2 right-2 z-60" onClick={() => setShowImageModal(false)}>
+                        <button className="absolute top-2 right-2 z-60" onClick={() => {setShowImageModal(false); setShowLoadSpinner(false)}}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="#DC143C" className="bi bi-x" viewBox="0 0 16 16">
                                 <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
                             </svg>
                         </button>
                     </div>
-                    <div className="flex flex-col space-y-6 items-center mt-10 w-full h-full"> 
-                        <h3 className="font-mulish">Upload Image or Screenshot</h3>
+                    <div className="flex flex-col space-y-6 items-center justify-center w-full h-full"> 
+                        <h3 className="font-mulish -mt-2">Upload Image or Screenshot</h3>
                         <p className="font-mulish text-left mt-3 w-[80%]">Please upload an image of a sudoku board:
                             <li>Must be a 9×9 grid representing a Sudoku puzzle</li>
                             <li>Each cell contains a number from 1 to 9, or -1 if unknown</li>
-                            <li>Should have reasonably clear grid boundaries, digit values, etc</li>
+                            <li>Clear outer grid boundary and digit values</li>
+                            <li>Cell widths and heights must be square and even</li>
                         </p>
-                        <form onSubmit={handleImage} className="mt-6">
-                            <input id="image_file" name="image_file" type="file" accept="image/*"/>
-                            <button type="submit" className="h-8 w-20 border-2 border-[#3D591C66] bg-[#B5D293] rounded-2 text-[#3D591C]">Submit</button>
-                        </form>
+                        <div className= "flex flex-row shrink mt-6 items-center">
+                            <form onSubmit={handleImage}>
+                                <input id="image_file" name="image_file" type="file" accept="image/*"/>
+                                <button type="submit" className="h-8 w-20 border-2 border-[#3D591C66] bg-[#B5D293] rounded-2 text-[#3D591C]">Submit</button>
+                            </form>
+                        </div>
+                    </div>
+                    {/* wrap spinner in div to reserve space */}
+                    <div className="absolute bottom-14 right-8">
+                        {showLoadSpinner && <Spinner animation="border" variant="secondary" size="sm" />}
                     </div>
                 </div>
             )}
+            {/* warning modal for image parsing */}
+            {showWarningModal && 
+                (<div className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[250px] w-[500px] max-w-[80%] bg-white rounded-md z-50`}>
+                    <div className="relative w-full">
+                        <button className="absolute top-2 right-2 z-60" onClick={() => setShowWarningModal(false)}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="#DC143C" className="bi bi-x" viewBox="0 0 16 16">
+                                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="flex flex-col items-center justify-center w-full h-full">
+                        <h4 className="font-mulish w-[80%] text-green-600">Image has been parsed!</h4>
+                        <h5 className="font-mulish w-[80%] text-[#DC143CCC]">Warning: May not be 100% accurate. Verify results and adjust before solving</h5>
+                    </div>
+                </div>)
+            }
             
             <div className="relative">
                 <button disabled={submitted} 
